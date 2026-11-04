@@ -288,45 +288,49 @@ export class WebGLChromaProcessor {
       return canvas;
     }
 
-    const imgData = ctx.getImageData(0, 0, width, height);
-    const data = imgData.data;
-    const [kr, kg, kb] = this.hexToRgb(settings.color);
+    try {
+      const imgData = ctx.getImageData(0, 0, width, height);
+      const data = imgData.data;
+      const [kr, kg, kb] = this.hexToRgb(settings.color);
 
-    const keyCb = -0.168736 * kr - 0.331264 * kg + 0.5 * kb + 0.5;
-    const keyCr = 0.5 * kr - 0.418688 * kg - 0.081312 * kb + 0.5;
+      const keyCb = -0.168736 * kr - 0.331264 * kg + 0.5 * kb + 0.5;
+      const keyCr = 0.5 * kr - 0.418688 * kg - 0.081312 * kb + 0.5;
 
-    const sim = settings.similarity;
-    const smooth = Math.max(settings.smoothness, 0.001);
-    const spill = settings.spill;
+      const sim = settings.similarity;
+      const smooth = Math.max(settings.smoothness, 0.001);
+      const spill = settings.spill;
 
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i] / 255;
-      const g = data[i + 1] / 255;
-      const b = data[i + 2] / 255;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i] / 255;
+        const g = data[i + 1] / 255;
+        const b = data[i + 2] / 255;
 
-      const cb = -0.168736 * r - 0.331264 * g + 0.5 * b + 0.5;
-      const cr = 0.5 * r - 0.418688 * g - 0.081312 * b + 0.5;
+        const cb = -0.168736 * r - 0.331264 * g + 0.5 * b + 0.5;
+        const cr = 0.5 * r - 0.418688 * g - 0.081312 * b + 0.5;
 
-      const dCb = cb - keyCb;
-      const dCr = cr - keyCr;
-      const dist = Math.sqrt(dCb * dCb + dCr * dCr);
+        const dCb = cb - keyCb;
+        const dCr = cr - keyCr;
+        const dist = Math.sqrt(dCb * dCb + dCr * dCr);
 
-      if (dist < sim) {
-        data[i + 3] = 0;
-      } else if (dist < sim + smooth) {
-        const factor = (dist - sim) / smooth;
-        data[i + 3] = Math.floor(data[i + 3] * factor);
-      }
+        if (dist < sim) {
+          data[i + 3] = 0;
+        } else if (dist < sim + smooth) {
+          const factor = (dist - sim) / smooth;
+          data[i + 3] = Math.floor(data[i + 3] * factor);
+        }
 
-      if (spill > 0 && data[i + 3] > 0) {
-        const maxRB = Math.max(data[i], data[i + 2]);
-        if (data[i + 1] > maxRB) {
-          data[i + 1] = Math.floor(data[i + 1] * (1 - spill) + maxRB * spill);
+        if (spill > 0 && data[i + 3] > 0) {
+          const maxRB = Math.max(data[i], data[i + 2]);
+          if (data[i + 1] > maxRB) {
+            data[i + 1] = Math.floor(data[i + 1] * (1 - spill) + maxRB * spill);
+          }
         }
       }
-    }
 
-    ctx.putImageData(imgData, 0, 0);
+      ctx.putImageData(imgData, 0, 0);
+    } catch {
+      // In case canvas is tainted, safely return drawn canvas without crash
+    }
     return canvas;
   }
 }

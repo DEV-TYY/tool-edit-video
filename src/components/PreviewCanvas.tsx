@@ -126,8 +126,13 @@ export const PreviewCanvas: React.FC<PreviewCanvasProps> = ({
         overlaySettings
       );
 
-      // Render Overlay Gizmo if active and no text is selected
-      if (showGizmo && !isEyedropperActive && !selectedTextId) {
+      // Render Overlay Gizmo if active, no text is selected, and green screen is not removed
+      if (
+        showGizmo &&
+        !isEyedropperActive &&
+        !selectedTextId &&
+        !overlaySettings.chromaKey.enabled
+      ) {
         const box = CanvasCompositor.getBoundingBox(
           width,
           height,

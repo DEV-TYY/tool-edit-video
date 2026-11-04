@@ -21,6 +21,11 @@ import {
   MicOff,
   Bold,
   Italic,
+  Link as LinkIcon,
+  Clipboard,
+  Loader2,
+  AlertCircle,
+  X,
 } from 'lucide-react';
 import type {
   BackgroundSettings,
@@ -52,6 +57,15 @@ interface SidebarProps {
   onUploadBgFile: (file: File) => void;
   onUploadOverlayFile: (file: File) => void;
   onUploadAudioFile: (file: File) => void;
+  onLoadBgUrl: (
+    url: string,
+    typeHint?: 'video' | 'image'
+  ) => Promise<{ success: boolean; error?: string }>;
+  onClearBg: () => void;
+  onLoadOverlayUrl: (
+    url: string
+  ) => Promise<{ success: boolean; error?: string }>;
+  onClearOverlay: () => void;
 }
 
 type TabType = 'bg' | 'overlay' | 'chroma' | 'text' | 'sound';
@@ -76,8 +90,170 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onUploadBgFile,
   onUploadOverlayFile,
   onUploadAudioFile,
+  onLoadBgUrl,
+  onClearBg,
+  onLoadOverlayUrl,
+  onClearOverlay,
 }) => {
   const [activeTab, setActiveTab] = useState<TabType>('bg');
+  const [urlInput, setUrlInput] = useState('');
+  const [isLoadingUrl, setIsLoadingUrl] = useState(false);
+  const [urlError, setUrlError] = useState<string | null>(null);
+  const [showUploadDropzone, setShowUploadDropzone] = useState(false);
+
+  // Overlay Link state
+  const [overlayUrlInput, setOverlayUrlInput] = useState('');
+  const [isLoadingOverlayUrl, setIsLoadingOverlayUrl] = useState(false);
+  const [overlayUrlError, setOverlayUrlError] = useState<string | null>(null);
+  const [showOverlayUploadDropzone, setShowOverlayUploadDropzone] = useState(false);
+
+  const samplePresets = [
+    {
+      name: '📌 Pinterest (pin.it/1s37yq8Ry)',
+      type: 'video' as const,
+      url: 'https://pin.it/1s37yq8Ry',
+    },
+    {
+      name: '🌺 Flower (Video)',
+      type: 'video' as const,
+      url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    },
+    {
+      name: '🎬 Friday (Video)',
+      type: 'video' as const,
+      url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4',
+    },
+    {
+      name: '🏖️ Beach (Image)',
+      type: 'image' as const,
+      url: 'https://images.unsplash.com/photo-1507525428034-b723cf961d3e?auto=format&fit=crop&w=1280&q=80',
+    },
+    {
+      name: '🌆 Neon City (Image)',
+      type: 'image' as const,
+      url: 'https://images.unsplash.com/photo-1518709268805-4e9042af9f23?auto=format&fit=crop&w=1280&q=80',
+    },
+  ];
+
+  const overlaySamplePresets = [
+    {
+      name: '📌 Pinterest Video (pin.it/1s37yq8Ry)',
+      url: 'https://pin.it/1s37yq8Ry',
+    },
+    {
+      name: '🎬 Friday (Sample)',
+      url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/friday.mp4',
+    },
+    {
+      name: '🌺 Flower (Sample)',
+      url: 'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    },
+  ];
+
+  const handleApplyUrl = async (overrideUrl?: string) => {
+    const targetUrl = (overrideUrl !== undefined ? overrideUrl : urlInput).trim();
+    if (!targetUrl) {
+      setUrlError('Please enter an image or video URL.');
+      return;
+    }
+    setUrlError(null);
+    setIsLoadingUrl(true);
+    try {
+      const res = await onLoadBgUrl(
+        targetUrl,
+        bgSettings.type === 'color' ? undefined : bgSettings.type
+      );
+      if (!res.success) {
+        setUrlError(res.error || 'Failed to load media from link.');
+      } else {
+        setUrlInput('');
+      }
+    } catch {
+      setUrlError('Network error while loading media link.');
+    } finally {
+      setIsLoadingUrl(false);
+    }
+  };
+
+  const handleApplyOverlayUrl = async (overrideUrl?: string) => {
+    const targetUrl = (overrideUrl !== undefined ? overrideUrl : overlayUrlInput).trim();
+    if (!targetUrl) {
+      setOverlayUrlError('Please enter a video URL.');
+      return;
+    }
+    setOverlayUrlError(null);
+    setIsLoadingOverlayUrl(true);
+    try {
+      const res = await onLoadOverlayUrl(targetUrl);
+      if (!res.success) {
+        setOverlayUrlError(res.error || 'Failed to load overlay video link.');
+      } else {
+        setOverlayUrlInput('');
+      }
+    } catch {
+      setOverlayUrlError('Network error while loading video link.');
+    } finally {
+      setIsLoadingOverlayUrl(false);
+    }
+  };
+
+  const handlePasteFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        const trimmed = text.trim();
+        setUrlInput(trimmed);
+        setUrlError(null);
+        if (
+          trimmed.startsWith('http://') ||
+          trimmed.startsWith('https://') ||
+          trimmed.startsWith('data:')
+        ) {
+          handleApplyUrl(trimmed);
+        }
+      }
+    } catch (e) {
+      console.warn('Clipboard read failed:', e);
+      setUrlError(
+        'Clipboard access unavailable. Please paste directly into the input.'
+      );
+    }
+  };
+
+  const handlePasteOverlayFromClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text && text.trim()) {
+        const trimmed = text.trim();
+        setOverlayUrlInput(trimmed);
+        setOverlayUrlError(null);
+        if (
+          trimmed.startsWith('http://') ||
+          trimmed.startsWith('https://') ||
+          trimmed.startsWith('data:')
+        ) {
+          handleApplyOverlayUrl(trimmed);
+        }
+      }
+    } catch (e) {
+      console.warn('Clipboard read failed:', e);
+      setOverlayUrlError(
+        'Clipboard access unavailable. Please paste directly into the input.'
+      );
+    }
+  };
+
+  const handleClearBgMedia = () => {
+    setUrlInput('');
+    setUrlError(null);
+    onClearBg();
+  };
+
+  const handleClearOverlayMedia = () => {
+    setOverlayUrlInput('');
+    setOverlayUrlError(null);
+    onClearOverlay();
+  };
 
   const presetColors = [
     { name: 'Pure Green', hex: '#00ff00' },
@@ -195,32 +371,183 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </button>
             </div>
 
-            {/* File Upload Zone */}
+            {/* Link (URL) Input & Media Source */}
             {bgSettings.type !== 'color' && (
-              <div className="upload-dropzone">
-                <label className="dropzone-label">
-                  <Upload className="w-8 h-8 text-sky-400 mb-2" />
-                  <span className="dropzone-main-text">
-                    {bgSettings.file
-                      ? bgSettings.file.name
-                      : `Click to upload background ${bgSettings.type}`}
-                  </span>
-                  <span className="dropzone-sub-text">
-                    {bgSettings.type === 'video'
-                      ? 'MP4, WebM, MOV supported'
-                      : 'JPG, PNG, WebP supported'}
-                  </span>
-                  <input
-                    type="file"
-                    accept={bgSettings.type === 'video' ? 'video/*' : 'image/*'}
-                    onChange={handleBgFileChange}
-                    className="hidden"
-                  />
-                </label>
+              <div className="bg-link-container">
+                {/* Active media card if already loaded */}
                 {bgSettings.url && (
-                  <div className="file-loaded-badge">
-                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Background media loaded</span>
+                  <div className="active-bg-card">
+                    <div className="active-bg-header">
+                      <div className="active-bg-icon">
+                        {bgSettings.type === 'video' ? (
+                          <Video className="w-4 h-4 text-sky-400" />
+                        ) : (
+                          <ImageIcon className="w-4 h-4 text-emerald-400" />
+                        )}
+                      </div>
+                      <div className="active-bg-info">
+                        <span className="active-bg-type">
+                          {bgSettings.type === 'video'
+                            ? 'Video Background'
+                            : 'Image Background'}
+                        </span>
+                        <span
+                          className="active-bg-url"
+                          title={bgSettings.sourceUrl || bgSettings.url}
+                        >
+                          {bgSettings.sourceUrl ||
+                            (bgSettings.file
+                              ? bgSettings.file.name
+                              : 'Online Link')}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        className="btn-icon-danger"
+                        onClick={handleClearBgMedia}
+                        title="Remove background"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="active-bg-status">
+                      <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Loaded & Active</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* URL input field */}
+                <div className="bg-link-label-row">
+                  <label className="control-label">
+                    <LinkIcon className="w-3.5 h-3.5 mr-1 text-sky-400" />
+                    <span>
+                      Copy & Paste {bgSettings.type === 'video' ? 'Video' : 'Image'} Link
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    className="btn-text-action"
+                    onClick={handlePasteFromClipboard}
+                    title="Paste copied link from clipboard"
+                  >
+                    <Clipboard className="w-3 h-3 mr-1" />
+                    <span>Paste Link</span>
+                  </button>
+                </div>
+
+                <div className="bg-link-input-group">
+                  <input
+                    type="url"
+                    className="bg-link-input"
+                    placeholder={
+                      bgSettings.type === 'video'
+                        ? 'Paste video link (.mp4, pin.it/..., https://...)'
+                        : 'Paste image link (.jpg, .png, pin.it/..., unsplash...)'
+                    }
+                    value={urlInput}
+                    onChange={(e) => {
+                      setUrlInput(e.target.value);
+                      if (urlError) setUrlError(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleApplyUrl();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="btn-apply-link"
+                    onClick={() => handleApplyUrl()}
+                    disabled={isLoadingUrl || !urlInput.trim()}
+                    title="Set background from link"
+                  >
+                    {isLoadingUrl ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <span>Load</span>
+                    )}
+                  </button>
+                </div>
+
+                {urlError && (
+                  <div className="bg-link-error">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span className="flex-1">{urlError}</span>
+                    <button
+                      type="button"
+                      className="ml-auto text-slate-400 hover:text-white"
+                      onClick={() => setUrlError(null)}
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                {/* Preset Sample Links */}
+                <div className="sample-presets-section">
+                  <span className="sample-presets-label">
+                    Quick Sample Links:
+                  </span>
+                  <div className="sample-presets-grid">
+                    {samplePresets.map((preset) => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        className="sample-preset-pill"
+                        onClick={() => {
+                          setUrlInput(preset.url);
+                          handleApplyUrl(preset.url);
+                        }}
+                        title={preset.url}
+                      >
+                        {preset.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Optional local file upload toggle */}
+                <div className="upload-fallback-toggle">
+                  <button
+                    type="button"
+                    className="btn-link-subtle"
+                    onClick={() => setShowUploadDropzone(!showUploadDropzone)}
+                  >
+                    <Upload className="w-3 h-3 mr-1" />
+                    <span>
+                      {showUploadDropzone
+                        ? 'Hide file upload'
+                        : 'Or upload file from computer'}
+                    </span>
+                  </button>
+                </div>
+
+                {showUploadDropzone && (
+                  <div className="upload-dropzone mt-1">
+                    <label className="dropzone-label">
+                      <Upload className="w-6 h-6 text-sky-400 mb-1" />
+                      <span className="dropzone-main-text">
+                        {bgSettings.file
+                          ? bgSettings.file.name
+                          : `Choose local background ${bgSettings.type}`}
+                      </span>
+                      <span className="dropzone-sub-text">
+                        {bgSettings.type === 'video'
+                          ? 'MP4, WebM, MOV supported'
+                          : 'JPG, PNG, WebP supported'}
+                      </span>
+                      <input
+                        type="file"
+                        accept={
+                          bgSettings.type === 'video' ? 'video/*' : 'image/*'
+                        }
+                        onChange={handleBgFileChange}
+                        className="hidden"
+                      />
+                    </label>
                   </div>
                 )}
               </div>
@@ -443,29 +770,204 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className="panel-section">
             <h3 className="section-title">Overlay Video (Layer)</h3>
 
-            {/* Overlay Video Upload Zone */}
-            <div className="upload-dropzone">
-              <label className="dropzone-label">
-                <Upload className="w-8 h-8 text-emerald-400 mb-2" />
-                <span className="dropzone-main-text">
-                  {overlaySettings.file
-                    ? overlaySettings.file.name
-                    : 'Upload Overlay Video'}
-                </span>
-                <span className="dropzone-sub-text">
-                  Green screen, reaction video, sticker, avatar (MP4/WebM)
-                </span>
-                <input
-                  type="file"
-                  accept="video/*"
-                  onChange={handleOverlayFileChange}
-                  className="hidden"
-                />
-              </label>
+            {/* Overlay Video Link & Media Source */}
+            <div className="bg-link-container">
+              {/* Active Overlay Card if loaded */}
               {overlaySettings.url && (
-                <div className="file-loaded-badge">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>Overlay video ready</span>
+                <div className="active-bg-card">
+                  <div className="active-bg-header">
+                    <div className="active-bg-icon">
+                      <Video className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <div className="active-bg-info">
+                      <span className="active-bg-type">Overlay Video Active</span>
+                      <span
+                        className="active-bg-url"
+                        title={overlaySettings.sourceUrl || overlaySettings.url}
+                      >
+                        {overlaySettings.sourceUrl ||
+                          (overlaySettings.file
+                            ? overlaySettings.file.name
+                            : 'Online Video Link')}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-icon-danger"
+                      onClick={handleClearOverlayMedia}
+                      title="Remove overlay video"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                  <div className="active-bg-status">
+                    <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Overlay Video Loaded</span>
+                  </div>
+                </div>
+              )}
+
+              {/* URL input field */}
+              <div className="bg-link-label-row">
+                <label className="control-label">
+                  <LinkIcon className="w-3.5 h-3.5 mr-1 text-emerald-400" />
+                  <span>Copy & Paste Video Link (Pinterest / MP4)</span>
+                </label>
+                <button
+                  type="button"
+                  className="btn-text-action"
+                  onClick={handlePasteOverlayFromClipboard}
+                  title="Paste copied link from clipboard"
+                >
+                  <Clipboard className="w-3 h-3 mr-1" />
+                  <span>Paste Link</span>
+                </button>
+              </div>
+
+              <div className="bg-link-input-group">
+                <input
+                  type="url"
+                  className="bg-link-input"
+                  placeholder="Paste link (pin.it/..., pinterest.com/pin/..., .mp4...)"
+                  value={overlayUrlInput}
+                  onChange={(e) => {
+                    setOverlayUrlInput(e.target.value);
+                    if (overlayUrlError) setOverlayUrlError(null);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleApplyOverlayUrl();
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="btn-apply-link"
+                  onClick={() => handleApplyOverlayUrl()}
+                  disabled={isLoadingOverlayUrl || !overlayUrlInput.trim()}
+                  title="Set overlay from link"
+                >
+                  {isLoadingOverlayUrl ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <span>Load</span>
+                  )}
+                </button>
+              </div>
+
+              {overlayUrlError && (
+                <div className="bg-link-error">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                  <span className="flex-1">{overlayUrlError}</span>
+                  <button
+                    type="button"
+                    className="ml-auto text-slate-400 hover:text-white"
+                    onClick={() => setOverlayUrlError(null)}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+
+              {/* Direct Pinterest Support Feature Box */}
+              <div className="pinterest-tip-box">
+                <div className="pinterest-tip-header">
+                  <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Direct Pinterest Links Supported:</span>
+                </div>
+                <p className="pinterest-tip-text">
+                  You can copy and paste Pinterest links directly (e.g. <code>https://pin.it/...</code> or <code>pinterest.com/pin/...</code>). The tool will automatically extract the video stream and apply chroma key!
+                </p>
+                <div className="pinterest-actions-row">
+                  <button
+                    type="button"
+                    className="btn-pinterest-tool"
+                    onClick={() => {
+                      setOverlayUrlInput('https://pin.it/1s37yq8Ry');
+                      handleApplyOverlayUrl('https://pin.it/1s37yq8Ry');
+                    }}
+                    title="Load requested Pinterest video: https://pin.it/1s37yq8Ry"
+                  >
+                    <Sparkles className="w-3 h-3 mr-1 text-emerald-400" />
+                    <span>Try Sample: pin.it/1s37yq8Ry</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Preset Sample Links */}
+              <div className="sample-presets-section">
+                <span className="sample-presets-label">
+                  Quick Sample Video Links:
+                </span>
+                <div className="sample-presets-grid">
+                  {overlaySamplePresets.map((preset) => (
+                    <button
+                      key={preset.name}
+                      type="button"
+                      className="sample-preset-pill"
+                      onClick={() => {
+                        setOverlayUrlInput(preset.url);
+                        handleApplyOverlayUrl(preset.url);
+                      }}
+                      title={preset.url}
+                    >
+                      {preset.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Optional local file upload toggle */}
+              <div className="upload-fallback-toggle">
+                <button
+                  type="button"
+                  className="btn-link-subtle"
+                  onClick={() =>
+                    setShowOverlayUploadDropzone(!showOverlayUploadDropzone)
+                  }
+                >
+                  <Upload className="w-3 h-3 mr-1" />
+                  <span>
+                    {showOverlayUploadDropzone
+                      ? 'Hide file upload'
+                      : 'Or upload video file from computer'}
+                  </span>
+                </button>
+              </div>
+
+              {showOverlayUploadDropzone && (
+                <div
+                  className="upload-dropzone mt-1"
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                      onUploadOverlayFile(e.dataTransfer.files[0]);
+                    }
+                  }}
+                >
+                  <label className="dropzone-label">
+                    <Upload className="w-6 h-6 text-emerald-400 mb-1" />
+                    <span className="dropzone-main-text">
+                      {overlaySettings.file
+                        ? overlaySettings.file.name
+                        : 'Drop video here or click to select'}
+                    </span>
+                    <span className="dropzone-sub-text">
+                      MP4, WebM, MOV supported (drag & drop)
+                    </span>
+                    <input
+                      type="file"
+                      accept="video/*"
+                      onChange={handleOverlayFileChange}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
               )}
             </div>

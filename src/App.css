@@ -372,6 +372,320 @@ body {
   color: #34d399;
 }
 
+/* Background Link Input & Presets */
+.bg-link-container {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.bg-link-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.btn-text-action {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: none;
+  color: var(--accent-cyan);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.btn-text-action:hover {
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+}
+
+.bg-link-input-group {
+  display: flex;
+  gap: 6px;
+  position: relative;
+}
+
+.bg-link-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-main);
+  outline: none;
+  transition: all 0.2s ease;
+  min-width: 0;
+}
+
+.bg-link-input:focus {
+  border-color: var(--accent-cyan);
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.bg-link-input::placeholder {
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.btn-apply-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 14px;
+  background: linear-gradient(135deg, #0284c7, #0ea5e9);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-apply-link:hover:not(:disabled) {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.btn-apply-link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.bg-link-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  background: rgba(244, 63, 94, 0.12);
+  border: 1px solid rgba(244, 63, 94, 0.3);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: #fb7185;
+}
+
+/* Sample presets */
+.sample-presets-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.sample-presets-label {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+.sample-presets-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.sample-preset-pill {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sample-preset-pill:hover {
+  background: rgba(56, 189, 248, 0.08);
+  border-color: rgba(56, 189, 248, 0.3);
+  color: var(--text-main);
+  transform: translateY(-1px);
+}
+
+/* Active background media card */
+.active-bg-card {
+  background: rgba(16, 185, 129, 0.06);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.active-bg-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.active-bg-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-sm);
+  background: rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.active-bg-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.active-bg-type {
+  font-size: 11px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.active-bg-url {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.active-bg-status {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: #34d399;
+}
+
+.btn-icon-danger {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  padding: 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon-danger:hover {
+  background: rgba(244, 63, 94, 0.15);
+  color: #fb7185;
+}
+
+/* Upload fallback */
+.upload-fallback-toggle {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.btn-link-subtle {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 11px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s ease;
+}
+
+.btn-link-subtle:hover {
+  color: var(--text-muted);
+  text-decoration: underline;
+}
+
+/* Pinterest Tip Box */
+.pinterest-tip-box {
+  background: rgba(230, 0, 35, 0.08);
+  border: 1px solid rgba(230, 0, 35, 0.25);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.pinterest-tip-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #ff7685;
+}
+
+.pinterest-tip-text {
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.pinterest-steps-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 2px;
+}
+
+.pinterest-step {
+  color: var(--text-main);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.pinterest-step b {
+  color: var(--accent-cyan);
+}
+
+.pinterest-actions-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
+  flex-wrap: wrap;
+}
+
+.btn-pinterest-tool {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: rgba(230, 0, 35, 0.2);
+  border: 1px solid rgba(230, 0, 35, 0.4);
+  border-radius: var(--radius-sm);
+  color: #fda4af;
+  font-size: 11px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.btn-pinterest-tool:hover {
+  background: rgba(230, 0, 35, 0.35);
+  border-color: #f43f5e;
+  color: #fff;
+  transform: translateY(-1px);
+}
+
 /* Segment Button Group */
 .segment-group {
   display: flex;

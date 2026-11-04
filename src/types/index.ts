@@ -48,6 +48,7 @@ export interface BackgroundSettings {
   type: 'video' | 'image' | 'color';
   file: File | null;
   url: string | null;
+  sourceUrl?: string;
   solidColor: string;
   fit: 'cover' | 'contain' | 'fill';
   volume: number; // 0 - 1
@@ -62,6 +63,7 @@ export interface BackgroundSettings {
 export interface OverlaySettings {
   file: File | null;
   url: string | null;
+  sourceUrl?: string;
   volume: number; // 0 - 1
   muted: boolean;
   stripAudio: boolean; // Completely remove original audio

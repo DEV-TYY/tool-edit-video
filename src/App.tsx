@@ -277,6 +277,9 @@ export default function App() {
 
   // Upload Background File
   const handleUploadBgFile = (file: File) => {
+    if (bgSettings.url && bgSettings.url.startsWith('blob:')) {
+      URL.revokeObjectURL(bgSettings.url);
+    }
     const isVideo = file.type.startsWith('video/');
     const url = URL.createObjectURL(file);
 
@@ -286,6 +289,7 @@ export default function App() {
         type: 'video',
         file,
         url,
+        sourceUrl: file.name,
       }));
     } else {
       setBgSettings((prev) => ({
@@ -293,19 +297,378 @@ export default function App() {
         type: 'image',
         file,
         url,
+        sourceUrl: file.name,
       }));
     }
   };
 
+  // Load Background from URL (image or video link, including Pinterest pin.it / pin links)
+  const handleLoadBgUrl = useCallback(
+    async (
+      inputUrl: string,
+      typeHint?: 'video' | 'image'
+    ): Promise<{ success: boolean; error?: string }> => {
+      let trimmed = inputUrl.trim();
+      if (!trimmed) {
+        return { success: false, error: 'Please enter a valid URL.' };
+      }
+
+      if (
+        !trimmed.startsWith('http://') &&
+        !trimmed.startsWith('https://') &&
+        !trimmed.startsWith('data:') &&
+        !trimmed.startsWith('blob:')
+      ) {
+        trimmed = 'https://' + trimmed;
+      }
+
+      // Cleanup old blob URL if present
+      if (bgSettings.url && bgSettings.url.startsWith('blob:')) {
+        URL.revokeObjectURL(bgSettings.url);
+      }
+
+      // 1. If data URL or blob URL
+      if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+        const isVideo = trimmed.includes('video/') || typeHint === 'video';
+        setBgSettings((prev) => ({
+          ...prev,
+          type: isVideo ? 'video' : 'image',
+          file: null,
+          url: trimmed,
+          sourceUrl: trimmed,
+        }));
+        return { success: true };
+      }
+
+      let targetMediaUrl = trimmed;
+      let detectedType: 'video' | 'image' =
+        typeHint || (bgSettings.type === 'color' ? 'image' : bgSettings.type);
+      const isPinterest =
+        /pin\.it\//i.test(trimmed) ||
+        /pinterest\.[a-z.]+\/pin\//i.test(trimmed);
+
+      // Resolve Pinterest links
+      if (isPinterest) {
+        try {
+          const pinRes = await fetch(
+            `/api/resolve-pinterest?url=${encodeURIComponent(trimmed)}`
+          );
+          if (pinRes.ok) {
+            const data = await pinRes.json();
+            if (data.success && data.mediaUrl) {
+              targetMediaUrl = data.mediaUrl;
+              detectedType = data.mediaType;
+            } else {
+              return {
+                success: false,
+                error:
+                  data.error ||
+                  'Could not find any video or image on this Pinterest pin.',
+              };
+            }
+          }
+        } catch {
+          // If resolve fails, proxy-media will attempt fallback auto-resolution
+        }
+      }
+
+      // 2. Extension check if not resolved via Pinterest
+      if (!isPinterest) {
+        const isVideoExt = /\.(mp4|webm|mov|m4v|ogg)(\?.*)?$/i.test(trimmed);
+        const isImageExt = /\.(jpg|jpeg|png|webp|gif|svg|avif|bmp)(\?.*)?$/i.test(
+          trimmed
+        );
+        if (isVideoExt) detectedType = 'video';
+        else if (isImageExt) detectedType = 'image';
+      }
+
+      // 3. Try fetching as Blob for optimal CORS and canvas/export compatibility
+      let blob: Blob | null = null;
+      const needsProxy = isPinterest || targetMediaUrl.includes('pinimg.com');
+
+      if (!needsProxy) {
+        try {
+          const res = await fetch(targetMediaUrl, { mode: 'cors' });
+          if (res.ok) {
+            blob = await res.blob();
+          }
+        } catch {
+          // Direct fetch failed
+        }
+      }
+
+      // Proxy fallback (always used for Pinterest / pinimg to bypass CORS)
+      if (!blob) {
+        try {
+          const proxyRes = await fetch(
+            `/api/proxy-media?url=${encodeURIComponent(targetMediaUrl)}`
+          );
+          if (proxyRes.ok) {
+            blob = await proxyRes.blob();
+          }
+        } catch {
+          // Proxy failed
+        }
+      }
+
+      if (blob) {
+        const finalType = blob.type.startsWith('video/')
+          ? 'video'
+          : blob.type.startsWith('image/')
+          ? 'image'
+          : detectedType;
+
+        const objectUrl = URL.createObjectURL(blob);
+        setBgSettings((prev) => ({
+          ...prev,
+          type: finalType,
+          file: null,
+          url: objectUrl,
+          sourceUrl: trimmed,
+        }));
+        return { success: true };
+      }
+
+      // 4. Fallback: direct URL loading
+      const fallbackType = detectedType;
+
+      if (fallbackType === 'image') {
+        const isPinImg = targetMediaUrl.includes('pinimg.com');
+        const testImg = new Image();
+        testImg.referrerPolicy = 'no-referrer';
+        if (!isPinImg) {
+          testImg.crossOrigin = 'anonymous';
+        }
+        const loaded = await new Promise<boolean>((resolve) => {
+          testImg.onload = () => resolve(true);
+          testImg.onerror = () => {
+            // Retry without crossOrigin
+            const fallbackImg = new Image();
+            fallbackImg.referrerPolicy = 'no-referrer';
+            fallbackImg.onload = () => resolve(true);
+            fallbackImg.onerror = () => resolve(false);
+            fallbackImg.src = targetMediaUrl;
+          };
+          testImg.src = targetMediaUrl;
+        });
+
+        if (!loaded) {
+          return {
+            success: false,
+            error:
+              'Unable to load image from link. Please verify the link or try another URL.',
+          };
+        }
+      }
+
+      setBgSettings((prev) => ({
+        ...prev,
+        type: fallbackType,
+        file: null,
+        url: targetMediaUrl,
+        sourceUrl: trimmed,
+      }));
+      return { success: true };
+    },
+    [bgSettings.url, bgSettings.type]
+  );
+
+  // Clear background media
+  const handleClearBg = useCallback(() => {
+    if (bgSettings.url && bgSettings.url.startsWith('blob:')) {
+      URL.revokeObjectURL(bgSettings.url);
+    }
+    setBgSettings((prev) => ({
+      ...prev,
+      file: null,
+      url: null,
+      sourceUrl: undefined,
+    }));
+  }, [bgSettings.url]);
+
   // Upload Overlay File
   const handleUploadOverlayFile = (file: File) => {
+    if (overlaySettings.url && overlaySettings.url.startsWith('blob:')) {
+      URL.revokeObjectURL(overlaySettings.url);
+    }
     const url = URL.createObjectURL(file);
     setOverlaySettings((prev) => ({
       ...prev,
       file,
       url,
+      sourceUrl: file.name,
     }));
   };
+
+  // Load Overlay Video from URL (Pinterest pin.it / pin links, MP4, WebM, etc.)
+  const handleLoadOverlayUrl = useCallback(
+    async (inputUrl: string): Promise<{ success: boolean; error?: string }> => {
+      let trimmed = inputUrl.trim();
+      if (!trimmed) {
+        return { success: false, error: 'Please enter a valid video URL.' };
+      }
+
+      if (
+        !trimmed.startsWith('http://') &&
+        !trimmed.startsWith('https://') &&
+        !trimmed.startsWith('data:') &&
+        !trimmed.startsWith('blob:')
+      ) {
+        trimmed = 'https://' + trimmed;
+      }
+
+      // Cleanup old blob if any
+      if (overlaySettings.url && overlaySettings.url.startsWith('blob:')) {
+        URL.revokeObjectURL(overlaySettings.url);
+      }
+
+      // 1. Data URL or Blob URL
+      if (trimmed.startsWith('data:') || trimmed.startsWith('blob:')) {
+        setOverlaySettings((prev) => ({
+          ...prev,
+          file: null,
+          url: trimmed,
+          sourceUrl: trimmed,
+        }));
+        return { success: true };
+      }
+
+      let targetMediaUrl = trimmed;
+      const isPinterest =
+        /pin\.it\//i.test(trimmed) ||
+        /pinterest\.[a-z.]+\/pin\//i.test(trimmed);
+
+      // Auto-extract video from Pinterest pin link
+      if (isPinterest) {
+        try {
+          const pinRes = await fetch(
+            `/api/resolve-pinterest?url=${encodeURIComponent(trimmed)}`
+          );
+          if (pinRes.ok) {
+            const data = await pinRes.json();
+            if (data.success && data.mediaUrl) {
+              if (data.mediaType !== 'video') {
+                return {
+                  success: false,
+                  error:
+                    'This Pinterest link contains an image, not a video. To use it as a background, paste it into the Background tab.',
+                };
+              }
+              targetMediaUrl = data.mediaUrl;
+            } else {
+              return {
+                success: false,
+                error:
+                  data.error ||
+                  'Could not find a video on this Pinterest pin. Please check the link.',
+              };
+            }
+          }
+        } catch {
+          // Fall through to proxy-media which also has auto-resolution
+        }
+      }
+
+      // 2. Try fetching as Blob for optimal WebGL Chroma Key & MediaRecorder export
+      let blob: Blob | null = null;
+      const needsProxy = isPinterest || targetMediaUrl.includes('pinimg.com');
+
+      if (!needsProxy) {
+        try {
+          const res = await fetch(targetMediaUrl, { mode: 'cors' });
+          if (res.ok) {
+            blob = await res.blob();
+          }
+        } catch {
+          // Direct fetch failed
+        }
+      }
+
+      // If direct fetch failed or needsProxy, use local proxy
+      if (!blob) {
+        try {
+          const proxyRes = await fetch(
+            `/api/proxy-media?url=${encodeURIComponent(targetMediaUrl)}`
+          );
+          if (proxyRes.ok) {
+            blob = await proxyRes.blob();
+          }
+        } catch {
+          // Proxy failed
+        }
+      }
+
+      if (blob) {
+        const objectUrl = URL.createObjectURL(blob);
+        setOverlaySettings((prev) => ({
+          ...prev,
+          file: null,
+          url: objectUrl,
+          sourceUrl: trimmed,
+        }));
+        return { success: true };
+      }
+
+      // 3. Fallback: direct video URL
+      const isPinVideo = targetMediaUrl.includes('pinimg.com');
+      const testVideo = document.createElement('video');
+      if (!isPinVideo) {
+        testVideo.crossOrigin = 'anonymous';
+      }
+      testVideo.src = targetMediaUrl;
+
+      const loaded = await new Promise<boolean>((resolve) => {
+        const onLoaded = () => {
+          cleanup();
+          resolve(true);
+        };
+        const onError = () => {
+          cleanup();
+          resolve(false);
+        };
+        const cleanup = () => {
+          testVideo.removeEventListener('loadedmetadata', onLoaded);
+          testVideo.removeEventListener('error', onError);
+        };
+        testVideo.addEventListener('loadedmetadata', onLoaded);
+        testVideo.addEventListener('error', onError);
+        setTimeout(() => {
+          cleanup();
+          resolve(true);
+        }, 8000);
+      });
+
+      if (!loaded) {
+        return {
+          success: false,
+          error:
+            'Unable to load video from link. Please verify the link is accessible or try another URL.',
+        };
+      }
+
+      setOverlaySettings((prev) => ({
+        ...prev,
+        file: null,
+        url: targetMediaUrl,
+        sourceUrl: trimmed,
+      }));
+      return { success: true };
+    },
+    [overlaySettings.url]
+  );
+
+  // Clear overlay video
+  const handleClearOverlay = useCallback(() => {
+    if (overlaySettings.url && overlaySettings.url.startsWith('blob:')) {
+      URL.revokeObjectURL(overlaySettings.url);
+    }
+    setOverlaySettings((prev) => ({
+      ...prev,
+      file: null,
+      url: null,
+      sourceUrl: undefined,
+    }));
+  }, [overlaySettings.url]);
 
   // Upload Custom Audio File
   const handleUploadAudioFile = (file: File) => {
@@ -629,6 +992,12 @@ export default function App() {
           muted={bgSettings.muted || bgSettings.stripAudio}
           crossOrigin="anonymous"
           onLoadedMetadata={updateDuration}
+          onError={(e) => {
+            if ((e.currentTarget as HTMLVideoElement).crossOrigin) {
+              (e.currentTarget as HTMLVideoElement).removeAttribute('crossOrigin');
+              (e.currentTarget as HTMLVideoElement).load();
+            }
+          }}
           className="hidden"
         />
       )}
@@ -637,8 +1006,16 @@ export default function App() {
         <img
           ref={bgImageRef}
           src={bgSettings.url}
-          crossOrigin="anonymous"
+          referrerPolicy="no-referrer"
+          crossOrigin={
+            bgSettings.url.includes('pinimg.com') ? undefined : 'anonymous'
+          }
           alt="background"
+          onError={(e) => {
+            if ((e.currentTarget as HTMLImageElement).crossOrigin) {
+              (e.currentTarget as HTMLImageElement).removeAttribute('crossOrigin');
+            }
+          }}
           className="hidden"
         />
       )}
@@ -649,8 +1026,16 @@ export default function App() {
           src={overlaySettings.url}
           playsInline
           muted={overlaySettings.muted || overlaySettings.stripAudio}
-          crossOrigin="anonymous"
+          crossOrigin={
+            overlaySettings.url.includes('pinimg.com') ? undefined : 'anonymous'
+          }
           onLoadedMetadata={updateDuration}
+          onError={(e) => {
+            if ((e.currentTarget as HTMLVideoElement).crossOrigin) {
+              (e.currentTarget as HTMLVideoElement).removeAttribute('crossOrigin');
+              (e.currentTarget as HTMLVideoElement).load();
+            }
+          }}
           className="hidden"
         />
       )}
@@ -714,6 +1099,10 @@ export default function App() {
           onUploadBgFile={handleUploadBgFile}
           onUploadOverlayFile={handleUploadOverlayFile}
           onUploadAudioFile={handleUploadAudioFile}
+          onLoadBgUrl={handleLoadBgUrl}
+          onClearBg={handleClearBg}
+          onLoadOverlayUrl={handleLoadOverlayUrl}
+          onClearOverlay={handleClearOverlay}
         />
 
         {/* Center / Right Editor Workspace */}
